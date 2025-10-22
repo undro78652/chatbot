@@ -42,9 +42,21 @@ const AI_MODELS: AIModel[] = [
     provider: 'openrouter',
   },
   {
-    id: 'openai/gpt-4',
-    name: 'GPT-4 (OpenRouter)',
+    id: 'cognitivecomputations/dolphin3.0-mistral-24b',
+    name: 'Dolphin3.0 Mistral 24b',
     description: 'Most capable via OpenRouter',
+    provider: 'openrouter',
+  },
+    {
+    id: 'thedrummer/cydonia-24b-v4.1',
+    name: 'Cydonia-24b-v4.1',
+    description: 'Creative writing',
+    provider: 'openrouter',
+  },
+  {
+    id: 'deepseek/deepseek-chat-v3-0324',
+    name: 'Deepseek-chat-v3-0324',
+    description: 'Creative writing',
     provider: 'openrouter',
   },
 ];
