@@ -12,6 +12,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   selectedCharacterId: '',
   currentConversationId: '',
   darkMode: false,
+  fontSize: 'medium',
+  renderMarkdown: true,
+  autoScroll: true,
+  customModels: [],
 };
 
 const DEFAULT_CHARACTERS: Character[] = [

@@ -25,7 +25,9 @@ export interface AIModel {
   id: string;
   name: string;
   description: string;
-  provider: 'openai' | 'openrouter';
+  provider: 'openai' | 'openrouter' | 'custom';
+  endpoint?: string;
+  isCustom?: boolean;
 }
 
 export interface AppSettings {
@@ -34,6 +36,10 @@ export interface AppSettings {
   selectedCharacterId: string;
   currentConversationId: string;
   darkMode: boolean;
+  fontSize: 'small' | 'medium' | 'large';
+  renderMarkdown: boolean;
+  autoScroll: boolean;
+  customModels: AIModel[];
 }
 
 export interface ExportData {

@@ -9,12 +9,19 @@ export const sendMessageToAI = async (
   messages: Message[],
   apiKey: string,
   modelId: string,
-  provider: 'openai' | 'openrouter'
+  provider: 'openai' | 'openrouter' | 'custom',
+  customEndpoint?: string
 ): Promise<AIResponse> => {
   try {
-    const endpoint = provider === 'openai'
-      ? 'https://api.openai.com/v1/chat/completions'
-      : 'https://openrouter.ai/api/v1/chat/completions';
+    let endpoint: string;
+
+    if (provider === 'custom' && customEndpoint) {
+      endpoint = customEndpoint;
+    } else if (provider === 'openai') {
+      endpoint = 'https://api.openai.com/v1/chat/completions';
+    } else {
+      endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

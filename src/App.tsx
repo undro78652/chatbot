@@ -4,6 +4,8 @@ import { ChatInterface } from './components/ChatInterface';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { CharacterModal } from './components/CharacterModal';
 import { ModelSelector } from './components/ModelSelector';
+import { SettingsPanel } from './components/SettingsPanel';
+import { CustomModelModal } from './components/CustomModelModal';
 import { Character, Conversation, Message, AIModel, AppSettings } from './types';
 import {
   getSettings,
@@ -15,8 +17,9 @@ import {
 } from './utils/localStorage';
 import { sendMessageToAI } from './utils/aiService';
 import { handleExport, handleImport } from './utils/importExport';
+import { downloadJson } from './utils/importExport';
 
-const AI_MODELS: AIModel[] = [
+const DEFAULT_AI_MODELS: AIModel[] = [
   {
     id: 'gpt-3.5-turbo',
     name: 'GPT-3.5 Turbo',
@@ -42,21 +45,9 @@ const AI_MODELS: AIModel[] = [
     provider: 'openrouter',
   },
   {
-    id: 'cognitivecomputations/dolphin3.0-mistral-24b',
-    name: 'Dolphin3.0 Mistral 24b',
+    id: 'openai/gpt-4',
+    name: 'GPT-4 (OpenRouter)',
     description: 'Most capable via OpenRouter',
-    provider: 'openrouter',
-  },
-    {
-    id: 'thedrummer/cydonia-24b-v4.1',
-    name: 'Cydonia-24b-v4.1',
-    description: 'Creative writing',
-    provider: 'openrouter',
-  },
-  {
-    id: 'deepseek/deepseek-chat-v3-0324',
-    name: 'Deepseek-chat-v3-0324',
-    description: 'Creative writing',
     provider: 'openrouter',
   },
 ];
@@ -68,12 +59,16 @@ function App() {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [isCustomModelModalOpen, setIsCustomModelModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
+  const [editingModel, setEditingModel] = useState<AIModel | undefined>();
   const [isLoading, setIsLoading] = useState(false);
 
+  const allModels = [...DEFAULT_AI_MODELS, ...(settings.customModels || [])];
   const currentCharacter = characters.find((c) => c.id === settings.selectedCharacterId);
   const currentConversation = conversations.find((c) => c.id === settings.currentConversationId);
-  const selectedModel = AI_MODELS.find((m) => m.id === settings.selectedModelId) || AI_MODELS[0];
+  const selectedModel = allModels.find((m) => m.id === settings.selectedModelId) || allModels[0];
 
   useEffect(() => {
     if (!settings.selectedCharacterId && characters.length > 0) {
@@ -96,7 +91,7 @@ function App() {
   };
 
   const handleSaveApiKey = (apiKey: string, provider: 'openai' | 'openrouter') => {
-    const defaultModel = AI_MODELS.find((m) => m.provider === provider);
+    const defaultModel = DEFAULT_AI_MODELS.find((m) => m.provider === provider);
     updateSettings({
       apiKey,
       selectedModelId: defaultModel?.id || settings.selectedModelId,
@@ -204,24 +199,25 @@ function App() {
       timestamp: Date.now(),
     };
 
-    const systemMessage: Message = {
-      id: `sys-${Date.now()}`,
-      role: 'system',
-      content: currentCharacter.systemPrompt,
-      timestamp: Date.now(),
-    };
-
     const updatedMessages = [...currentConversation.messages, userMessage];
     updateConversation(currentConversation.id, updatedMessages);
 
     setIsLoading(true);
+
+    const systemMessage: Message = {
+      id: `sys-${Date.now()}`,
+      role: 'system',
+      content: currentCharacter.systemPrompt || 'You are a helpful assistant.',
+      timestamp: Date.now(),
+    };
 
     const messagesToSend = [systemMessage, ...updatedMessages];
     const response = await sendMessageToAI(
       messagesToSend,
       settings.apiKey,
       selectedModel.id,
-      selectedModel.provider
+      selectedModel.provider,
+      selectedModel.endpoint
     );
 
     setIsLoading(false);
@@ -245,6 +241,29 @@ function App() {
     }
   };
 
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    if (!currentConversation) return;
+
+    const updatedMessages = currentConversation.messages.map((msg) =>
+      msg.id === messageId ? { ...msg, content: newContent } : msg
+    );
+    updateConversation(currentConversation.id, updatedMessages);
+  };
+
+  const handleResendMessage = async (messageId: string) => {
+    if (!currentConversation) return;
+
+    const messageIndex = currentConversation.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const message = currentConversation.messages[messageIndex];
+    const messagesUpToResend = currentConversation.messages.slice(0, messageIndex);
+
+    updateConversation(currentConversation.id, messagesUpToResend);
+
+    await handleSendMessage(message.content);
+  };
+
   const updateConversation = (conversationId: string, messages: Message[]) => {
     const newConversations = conversations.map((c) =>
       c.id === conversationId
@@ -257,6 +276,22 @@ function App() {
 
   const handleExportData = () => {
     handleExport();
+  };
+
+  const handleExportCharacter = (characterId: string) => {
+    const character = characters.find((c) => c.id === characterId);
+    if (!character) return;
+
+    const characterConversations = conversations.filter((c) => c.characterId === characterId);
+    const exportData = {
+      version: '1.0',
+      exportDate: Date.now(),
+      character,
+      conversations: characterConversations,
+    };
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    downloadJson(exportData, `${character.name.toLowerCase().replace(/\s+/g, '-')}-export-${timestamp}.json`);
   };
 
   const handleImportData = async () => {
@@ -276,6 +311,34 @@ function App() {
     setIsCharacterModalOpen(true);
   };
 
+  const handleSaveCustomModel = (model: AIModel) => {
+    const existingIndex = settings.customModels.findIndex((m) => m.id === model.id);
+    let newCustomModels: AIModel[];
+
+    if (existingIndex >= 0) {
+      newCustomModels = [...settings.customModels];
+      newCustomModels[existingIndex] = model;
+    } else {
+      newCustomModels = [...settings.customModels, model];
+    }
+
+    updateSettings({ customModels: newCustomModels });
+  };
+
+  const handleDeleteCustomModel = (modelId: string) => {
+    const newCustomModels = settings.customModels.filter((m) => m.id !== modelId);
+    updateSettings({ customModels: newCustomModels });
+
+    if (settings.selectedModelId === modelId) {
+      updateSettings({ selectedModelId: DEFAULT_AI_MODELS[0].id });
+    }
+  };
+
+  const handleOpenCustomModelModal = (model?: AIModel) => {
+    setEditingModel(model);
+    setIsCustomModelModalOpen(true);
+  };
+
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
       <Sidebar
@@ -291,7 +354,7 @@ function App() {
         onEditCharacter={handleOpenCharacterModal}
         onDeleteCharacter={handleDeleteCharacter}
         onDeleteConversation={handleDeleteConversation}
-        onOpenSettings={() => setIsApiKeyModalOpen(true)}
+        onOpenSettings={() => setIsSettingsPanelOpen(true)}
         onExport={handleExportData}
         onImport={handleImportData}
         onToggleDarkMode={() => updateSettings({ darkMode: !settings.darkMode })}
@@ -301,12 +364,17 @@ function App() {
         messages={currentConversation?.messages || []}
         character={currentCharacter}
         selectedModel={selectedModel}
-        models={AI_MODELS}
+        models={allModels}
         isLoading={isLoading}
         hasApiKey={!!settings.apiKey}
+        renderMarkdown={settings.renderMarkdown}
+        autoScroll={settings.autoScroll}
+        fontSize={settings.fontSize}
         onSendMessage={handleSendMessage}
         onSelectModel={(modelId) => updateSettings({ selectedModelId: modelId })}
-        onOpenSettings={() => setIsApiKeyModalOpen(true)}
+        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+        onEditMessage={handleEditMessage}
+        onResendMessage={handleResendMessage}
       />
 
       <ApiKeyModal
@@ -329,9 +397,32 @@ function App() {
       <ModelSelector
         isOpen={isModelSelectorOpen}
         onClose={() => setIsModelSelectorOpen(false)}
-        models={AI_MODELS}
+        models={allModels}
         selectedModelId={settings.selectedModelId}
         onSelectModel={(modelId) => updateSettings({ selectedModelId: modelId })}
+      />
+
+      <SettingsPanel
+        isOpen={isSettingsPanelOpen}
+        onClose={() => setIsSettingsPanelOpen(false)}
+        settings={settings}
+        onUpdateSettings={updateSettings}
+        onOpenApiKeyModal={() => {
+          setIsSettingsPanelOpen(false);
+          setIsApiKeyModalOpen(true);
+        }}
+        onOpenCustomModelModal={handleOpenCustomModelModal}
+        onDeleteCustomModel={handleDeleteCustomModel}
+      />
+
+      <CustomModelModal
+        isOpen={isCustomModelModalOpen}
+        onClose={() => {
+          setIsCustomModelModalOpen(false);
+          setEditingModel(undefined);
+        }}
+        onSave={handleSaveCustomModel}
+        model={editingModel}
       />
     </div>
   );
