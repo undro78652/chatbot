@@ -62,7 +62,7 @@ export const CustomModelModal = ({ isOpen, onClose, onSave, model }: CustomModel
     if (!validateForm()) return;
 
     const newModel: AIModel = {
-      id: model?.id || `custom-${Date.now()}`,
+      id: modelId.trim(),
       name: name.trim(),
       description: description.trim(),
       provider: 'custom',
