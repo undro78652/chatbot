@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { X, Key, Type, Sparkles, ArrowDownToLine, Plus, Trash2, Edit } from 'lucide-react';
 import { AppSettings, AIModel } from '../types';
 
@@ -12,7 +12,7 @@ interface SettingsPanelProps {
   onDeleteCustomModel: (modelId: string) => void;
 }
 
-export const SettingsPanel = ({
+export const SettingsPanel = memo(({
   isOpen,
   onClose,
   settings,
@@ -271,4 +271,4 @@ export const SettingsPanel = ({
       </div>
     </div>
   );
-};
+});

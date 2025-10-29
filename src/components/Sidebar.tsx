@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { MessageSquare, Plus, User, Settings, Download, Upload, Moon, Sun, Trash2 } from 'lucide-react';
 import { Character, Conversation } from '../types';
 
@@ -20,7 +21,7 @@ interface SidebarProps {
   onToggleDarkMode: () => void;
 }
 
-export const Sidebar = ({
+export const Sidebar = memo(({
   characters,
   conversations,
   selectedCharacterId,
@@ -203,4 +204,4 @@ export const Sidebar = ({
       </div>
     </div>
   );
-};
+});

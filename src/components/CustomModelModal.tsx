@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { X, Plus } from 'lucide-react';
 import { AIModel } from '../types';
 
@@ -9,7 +9,7 @@ interface CustomModelModalProps {
   model?: AIModel;
 }
 
-export const CustomModelModal = ({ isOpen, onClose, onSave, model }: CustomModelModalProps) => {
+export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: CustomModelModalProps) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [modelId, setModelId] = useState('');
@@ -189,4 +189,4 @@ export const CustomModelModal = ({ isOpen, onClose, onSave, model }: CustomModel
       </div>
     </div>
   );
-};
+});

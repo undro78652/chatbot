@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { Send, Loader2, Settings as SettingsIcon, Edit2, RotateCcw } from 'lucide-react';
 import { Message, Character, AIModel } from '../types';
 import { MarkdownMessage } from './MarkdownMessage';
@@ -20,7 +20,7 @@ interface ChatInterfaceProps {
   onResendMessage: (messageId: string) => void;
 }
 
-export const ChatInterface = ({
+export const ChatInterface = memo(({
   messages,
   character,
   selectedModel,
@@ -289,4 +289,4 @@ export const ChatInterface = ({
       </div>
     </div>
   );
-};
+});

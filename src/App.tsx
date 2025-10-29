@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Sidebar } from './components/Sidebar';
 import { ChatInterface } from './components/ChatInterface';
@@ -63,16 +63,36 @@ function App() {
   const [editingModel, setEditingModel] = useState<AIModel | undefined>();
   const [isLoading, setIsLoading] = useState(false);
 
-  const allModels = [...DEFAULT_AI_MODELS, ...(settings.customModels || [])];
-  const currentCharacter = characters.find((c) => c.id === settings.selectedCharacterId);
-  const currentConversation = conversations.find((c) => c.id === settings.currentConversationId);
-  const selectedModel = allModels.find((m) => m.id === settings.selectedModelId) || allModels[0];
+  // Memoized computations - only recalculate when dependencies change
+  const allModels = useMemo(
+    () => [...DEFAULT_AI_MODELS, ...(settings.customModels || [])],
+    [settings.customModels]
+  );
+
+  const currentCharacter = useMemo(
+    () => characters.find((c) => c.id === settings.selectedCharacterId),
+    [characters, settings.selectedCharacterId]
+  );
+
+  const currentConversation = useMemo(
+    () => conversations.find((c) => c.id === settings.currentConversationId),
+    [conversations, settings.currentConversationId]
+  );
+
+  const selectedModel = useMemo(
+    () => allModels.find((m) => m.id === settings.selectedModelId) || allModels[0],
+    [allModels, settings.selectedModelId]
+  );
+
+  // Ref to avoid adding handleSelectCharacter to useEffect dependencies
+  const handleSelectCharacterRef = useRef<(characterId: string) => void>(() => {});
 
   useEffect(() => {
     if (!settings.selectedCharacterId && characters.length > 0) {
-      handleSelectCharacter(characters[0].id);
+      handleSelectCharacterRef.current(characters[0].id);
     }
-  }, [characters, settings.selectedCharacterId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [characters.length, settings.selectedCharacterId]);
 
   useEffect(() => {
     if (settings.darkMode) {
@@ -82,173 +102,228 @@ function App() {
     }
   }, [settings.darkMode]);
 
-  const updateSettings = (updates: Partial<AppSettings>) => {
-    const newSettings = { ...settings, ...updates };
-    setSettings(newSettings);
-    saveSettings(newSettings);
-  };
+  // Memoized callbacks - prevent child component re-renders
+  const updateSettings = useCallback((updates: Partial<AppSettings>) => {
+    setSettings((current) => {
+      const newSettings = { ...current, ...updates };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
 
-  const handleSaveApiKey = (apiKey: string, provider: 'openai' | 'openrouter') => {
+  const handleSaveApiKey = useCallback((apiKey: string, provider: 'openai' | 'openrouter') => {
     const defaultModel = DEFAULT_AI_MODELS.find((m) => m.provider === provider);
     updateSettings({
       apiKey,
-      selectedModelId: defaultModel?.id || settings.selectedModelId,
+      selectedModelId: defaultModel?.id,
     });
-  };
+  }, [updateSettings]);
 
-  const handleSelectCharacter = (characterId: string) => {
-    const characterConversations = conversations.filter((c) => c.characterId === characterId);
-    const latestConversation = characterConversations.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const createNewConversation = useCallback((characterId?: string) => {
+    setSettings((currentSettings) => {
+      setConversations((currentConversations) => {
+        const charId = characterId || currentSettings.selectedCharacterId;
+        if (!charId) return currentConversations;
 
-    if (latestConversation) {
-      updateSettings({
-        selectedCharacterId: characterId,
-        currentConversationId: latestConversation.id,
+        const newConversation: Conversation = {
+          id: `conversation-${uuidv4()}`,
+          characterId: charId,
+          messages: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        const newConversations = [...currentConversations, newConversation];
+        saveConversations(newConversations);
+
+        // Update settings with new conversation
+        const newSettings = {
+          ...currentSettings,
+          selectedCharacterId: charId,
+          currentConversationId: newConversation.id,
+        };
+        saveSettings(newSettings);
+        setSettings(newSettings);
+
+        return newConversations;
       });
-    } else {
-      createNewConversation(characterId);
-    }
-  };
-
-  const handleSelectConversation = (conversationId: string) => {
-    updateSettings({ currentConversationId: conversationId });
-  };
-
-  const createNewConversation = (characterId?: string) => {
-    const charId = characterId || settings.selectedCharacterId;
-    if (!charId) return;
-
-    const newConversation: Conversation = {
-      id: `conversation-${uuidv4()}`,
-      characterId: charId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    const newConversations = [...conversations, newConversation];
-    setConversations(newConversations);
-    saveConversations(newConversations);
-    updateSettings({
-      selectedCharacterId: charId,
-      currentConversationId: newConversation.id,
+      return currentSettings;
     });
-  };
+  }, []);
 
-  const handleSaveCharacter = (character: Character) => {
-    const existingIndex = characters.findIndex((c) => c.id === character.id);
-    let newCharacters: Character[];
+  const handleSelectCharacter = useCallback((characterId: string) => {
+    setConversations((currentConversations) => {
+      const characterConversations = currentConversations.filter((c) => c.characterId === characterId);
+      const latestConversation = characterConversations.sort((a, b) => b.updatedAt - a.updatedAt)[0];
 
-    if (existingIndex >= 0) {
-      newCharacters = [...characters];
-      newCharacters[existingIndex] = character;
-    } else {
-      newCharacters = [...characters, character];
-    }
-
-    setCharacters(newCharacters);
-    saveCharacters(newCharacters);
-
-    if (!settings.selectedCharacterId || existingIndex < 0) {
-      handleSelectCharacter(character.id);
-    }
-  };
-
-  const handleDeleteCharacter = (characterId: string) => {
-    if (characters.length <= 1) return;
-
-    const newCharacters = characters.filter((c) => c.id !== characterId);
-    const newConversations = conversations.filter((c) => c.characterId !== characterId);
-
-    setCharacters(newCharacters);
-    setConversations(newConversations);
-    saveCharacters(newCharacters);
-    saveConversations(newConversations);
-
-    if (settings.selectedCharacterId === characterId) {
-      handleSelectCharacter(newCharacters[0].id);
-    }
-  };
-
-  const handleDeleteConversation = (conversationId: string) => {
-    const newConversations = conversations.filter((c) => c.id !== conversationId);
-    setConversations(newConversations);
-    saveConversations(newConversations);
-
-    if (settings.currentConversationId === conversationId) {
-      const characterConversations = newConversations.filter(
-        (c) => c.characterId === settings.selectedCharacterId
-      );
-      if (characterConversations.length > 0) {
-        updateSettings({ currentConversationId: characterConversations[0].id });
+      if (latestConversation) {
+        updateSettings({
+          selectedCharacterId: characterId,
+          currentConversationId: latestConversation.id,
+        });
       } else {
-        createNewConversation();
+        createNewConversation(characterId);
       }
-    }
-  };
+      return currentConversations;
+    });
+  }, [updateSettings, createNewConversation]);
 
-  const handleSendMessage = async (content: string) => {
-    if (!currentConversation || !currentCharacter || !settings.apiKey) return;
+  // Update ref whenever handleSelectCharacter changes
+  useEffect(() => {
+    handleSelectCharacterRef.current = handleSelectCharacter;
+  }, [handleSelectCharacter]);
 
-    const userMessage: Message = {
-      id: `msg-${uuidv4()}`,
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
+  const handleSelectConversation = useCallback((conversationId: string) => {
+    updateSettings({ currentConversationId: conversationId });
+  }, [updateSettings]);
 
-    const updatedMessages = [...currentConversation.messages, userMessage];
-    updateConversation(currentConversation.id, updatedMessages);
+  const handleSaveCharacter = useCallback((character: Character) => {
+    setCharacters((current) => {
+      const existingIndex = current.findIndex((c) => c.id === character.id);
+      const newCharacters = existingIndex >= 0
+        ? [...current.slice(0, existingIndex), character, ...current.slice(existingIndex + 1)]
+        : [...current, character];
+      
+      saveCharacters(newCharacters);
+      return newCharacters;
+    });
 
-    setIsLoading(true);
+    setSettings((currentSettings) => {
+      if (!currentSettings.selectedCharacterId) {
+        handleSelectCharacter(character.id);
+      }
+      return currentSettings;
+    });
+  }, [handleSelectCharacter]);
 
-    const systemMessage: Message = {
-      id: `sys-${uuidv4()}`,
-      role: 'system',
-      content: currentCharacter.systemPrompt || 'You are a helpful assistant.',
-      timestamp: Date.now(),
-    };
+  const handleDeleteCharacter = useCallback((characterId: string) => {
+    setCharacters((current) => {
+      if (current.length <= 1) return current;
 
-    const messagesToSend = [systemMessage, ...updatedMessages];
-    const response = await sendMessageToAI(
-      messagesToSend,
-      settings.apiKey,
-      selectedModel.id,
-      selectedModel.provider,
-      selectedModel.endpoint
-    );
+      const newCharacters = current.filter((c) => c.id !== characterId);
+      saveCharacters(newCharacters);
 
-    setIsLoading(false);
+      setConversations((currentConvs) => {
+        const newConversations = currentConvs.filter((c) => c.characterId !== characterId);
+        saveConversations(newConversations);
+        return newConversations;
+      });
 
-    if (response.error) {
-      const errorMessage: Message = {
+      setSettings((currentSettings) => {
+        if (currentSettings.selectedCharacterId === characterId) {
+          handleSelectCharacter(newCharacters[0].id);
+        }
+        return currentSettings;
+      });
+
+      return newCharacters;
+    });
+  }, [handleSelectCharacter]);
+
+  const handleDeleteConversation = useCallback((conversationId: string) => {
+    setConversations((current) => {
+      const newConversations = current.filter((c) => c.id !== conversationId);
+      saveConversations(newConversations);
+
+      setSettings((currentSettings) => {
+        if (currentSettings.currentConversationId === conversationId) {
+          const characterConversations = newConversations.filter(
+            (c) => c.characterId === currentSettings.selectedCharacterId
+          );
+          if (characterConversations.length > 0) {
+            updateSettings({ currentConversationId: characterConversations[0].id });
+          } else {
+            createNewConversation();
+          }
+        }
+        return currentSettings;
+      });
+
+      return newConversations;
+    });
+  }, [updateSettings, createNewConversation]);
+
+  const updateConversation = useCallback((conversationId: string, messages: Message[]) => {
+    setConversations((current) => {
+      const newConversations = current.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages, updatedAt: Date.now() }
+          : c
+      );
+      saveConversations(newConversations);
+      return newConversations;
+    });
+  }, []);
+
+  const handleSendMessage = useCallback(async (content: string) => {
+    if (!currentConversation || !currentCharacter) return;
+
+    setSettings((currentSettings) => {
+      if (!currentSettings.apiKey) return currentSettings;
+
+      const userMessage: Message = {
         id: `msg-${uuidv4()}`,
-        role: 'assistant',
-        content: `Error: ${response.error}`,
+        role: 'user',
+        content,
         timestamp: Date.now(),
       };
-      updateConversation(currentConversation.id, [...updatedMessages, errorMessage]);
-    } else {
-      const assistantMessage: Message = {
-        id: `msg-${uuidv4()}`,
-        role: 'assistant',
-        content: response.content,
+
+      const updatedMessages = [...currentConversation.messages, userMessage];
+      updateConversation(currentConversation.id, updatedMessages);
+
+      setIsLoading(true);
+
+      const systemMessage: Message = {
+        id: `sys-${uuidv4()}`,
+        role: 'system',
+        content: currentCharacter.systemPrompt || 'You are a helpful assistant.',
         timestamp: Date.now(),
       };
-      updateConversation(currentConversation.id, [...updatedMessages, assistantMessage]);
-    }
-  };
 
-  const handleEditMessage = (messageId: string, newContent: string) => {
+      const messagesToSend = [systemMessage, ...updatedMessages];
+      
+      sendMessageToAI(
+        messagesToSend,
+        currentSettings.apiKey,
+        selectedModel.id,
+        selectedModel.provider,
+        selectedModel.endpoint
+      ).then((response) => {
+        setIsLoading(false);
+
+        if (response.error) {
+          const errorMessage: Message = {
+            id: `msg-${uuidv4()}`,
+            role: 'assistant',
+            content: `Error: ${response.error}`,
+            timestamp: Date.now(),
+          };
+          updateConversation(currentConversation.id, [...updatedMessages, errorMessage]);
+        } else {
+          const assistantMessage: Message = {
+            id: `msg-${uuidv4()}`,
+            role: 'assistant',
+            content: response.content,
+            timestamp: Date.now(),
+          };
+          updateConversation(currentConversation.id, [...updatedMessages, assistantMessage]);
+        }
+      });
+
+      return currentSettings;
+    });
+  }, [currentConversation, currentCharacter, selectedModel, updateConversation]);
+
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
     if (!currentConversation) return;
 
     const updatedMessages = currentConversation.messages.map((msg) =>
       msg.id === messageId ? { ...msg, content: newContent } : msg
     );
     updateConversation(currentConversation.id, updatedMessages);
-  };
+  }, [currentConversation, updateConversation]);
 
-  const handleResendMessage = async (messageId: string) => {
+  const handleResendMessage = useCallback(async (messageId: string) => {
     if (!currentConversation) return;
 
     const messageIndex = currentConversation.messages.findIndex((m) => m.id === messageId);
@@ -260,23 +335,13 @@ function App() {
     updateConversation(currentConversation.id, messagesUpToResend);
 
     await handleSendMessage(message.content);
-  };
+  }, [currentConversation, updateConversation, handleSendMessage]);
 
-  const updateConversation = (conversationId: string, messages: Message[]) => {
-    const newConversations = conversations.map((c) =>
-      c.id === conversationId
-        ? { ...c, messages, updatedAt: Date.now() }
-        : c
-    );
-    setConversations(newConversations);
-    saveConversations(newConversations);
-  };
-
-  const handleExportData = () => {
+  const handleExportData = useCallback(() => {
     handleExport();
-  };
+  }, []);
 
-  const handleImportData = async () => {
+  const handleImportData = useCallback(async () => {
     try {
       await handleImport();
       setSettings(getSettings());
@@ -286,40 +351,43 @@ function App() {
       console.error('Import failed:', error);
       alert('Failed to import data. Please check the file format.');
     }
-  };
+  }, []);
 
-  const handleOpenCharacterModal = (character?: Character) => {
+  const handleOpenCharacterModal = useCallback((character?: Character) => {
     setEditingCharacter(character);
     setIsCharacterModalOpen(true);
-  };
+  }, []);
 
-  const handleSaveCustomModel = (model: AIModel) => {
-    const existingIndex = settings.customModels.findIndex((m) => m.id === model.id);
-    let newCustomModels: AIModel[];
+  const handleSaveCustomModel = useCallback((model: AIModel) => {
+    setSettings((current) => {
+      const existingIndex = current.customModels.findIndex((m) => m.id === model.id);
+      const newCustomModels = existingIndex >= 0
+        ? [...current.customModels.slice(0, existingIndex), model, ...current.customModels.slice(existingIndex + 1)]
+        : [...current.customModels, model];
 
-    if (existingIndex >= 0) {
-      newCustomModels = [...settings.customModels];
-      newCustomModels[existingIndex] = model;
-    } else {
-      newCustomModels = [...settings.customModels, model];
-    }
+      const newSettings = { ...current, customModels: newCustomModels };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
 
-    updateSettings({ customModels: newCustomModels });
-  };
+  const handleDeleteCustomModel = useCallback((modelId: string) => {
+    setSettings((current) => {
+      const newCustomModels = current.customModels.filter((m) => m.id !== modelId);
+      const newSettings = {
+        ...current,
+        customModels: newCustomModels,
+        selectedModelId: current.selectedModelId === modelId ? DEFAULT_AI_MODELS[0].id : current.selectedModelId,
+      };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  }, []);
 
-  const handleDeleteCustomModel = (modelId: string) => {
-    const newCustomModels = settings.customModels.filter((m) => m.id !== modelId);
-    updateSettings({ customModels: newCustomModels });
-
-    if (settings.selectedModelId === modelId) {
-      updateSettings({ selectedModelId: DEFAULT_AI_MODELS[0].id });
-    }
-  };
-
-  const handleOpenCustomModelModal = (model?: AIModel) => {
+  const handleOpenCustomModelModal = useCallback((model?: AIModel) => {
     setEditingModel(model);
     setIsCustomModelModalOpen(true);
-  };
+  }, []);
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">

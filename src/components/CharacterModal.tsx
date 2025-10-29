@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { X, User, Palette } from 'lucide-react';
 import { Character } from '../types';
@@ -15,7 +15,7 @@ const AVATAR_COLORS = [
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
 ];
 
-export const CharacterModal = ({ isOpen, onClose, onSave, character }: CharacterModalProps) => {
+export const CharacterModal = memo(({ isOpen, onClose, onSave, character }: CharacterModalProps) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -153,4 +153,4 @@ export const CharacterModal = ({ isOpen, onClose, onSave, character }: Character
       </div>
     </div>
   );
-};
+});

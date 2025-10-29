@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { X, Key, AlertCircle, CheckCircle } from 'lucide-react';
 import { validateApiKey } from '../utils/aiService';
 
@@ -9,7 +9,7 @@ interface ApiKeyModalProps {
   currentApiKey: string;
 }
 
-export const ApiKeyModal = ({ isOpen, onClose, onSave, currentApiKey }: ApiKeyModalProps) => {
+export const ApiKeyModal = memo(({ isOpen, onClose, onSave, currentApiKey }: ApiKeyModalProps) => {
   const [apiKey, setApiKey] = useState(currentApiKey);
   const [provider, setProvider] = useState<'openai' | 'openrouter'>('openai');
   const [isValidating, setIsValidating] = useState(false);
@@ -158,4 +158,4 @@ export const ApiKeyModal = ({ isOpen, onClose, onSave, currentApiKey }: ApiKeyMo
       </div>
     </div>
   );
-};
+});

@@ -1,4 +1,5 @@
 import { AppSettings, Character, Conversation, ExportData } from '../types';
+import { debounce } from './debounce';
 
 const STORAGE_KEYS = {
   SETTINGS: 'chatbot_settings',
@@ -50,8 +51,13 @@ export const getSettings = (): AppSettings => {
   return DEFAULT_SETTINGS;
 };
 
-export const saveSettings = (settings: AppSettings): void => {
+// Debounced save functions to reduce localStorage blocking
+const debouncedSaveSettings = debounce((settings: AppSettings) => {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+}, 300);
+
+export const saveSettings = (settings: AppSettings): void => {
+  debouncedSaveSettings(settings);
 };
 
 export const getCharacters = (): Character[] => {
@@ -59,12 +65,17 @@ export const getCharacters = (): Character[] => {
   if (stored) {
     return JSON.parse(stored);
   }
-  saveCharacters(DEFAULT_CHARACTERS);
+  // Initial save happens synchronously
+  localStorage.setItem(STORAGE_KEYS.CHARACTERS, JSON.stringify(DEFAULT_CHARACTERS));
   return DEFAULT_CHARACTERS;
 };
 
-export const saveCharacters = (characters: Character[]): void => {
+const debouncedSaveCharacters = debounce((characters: Character[]) => {
   localStorage.setItem(STORAGE_KEYS.CHARACTERS, JSON.stringify(characters));
+}, 300);
+
+export const saveCharacters = (characters: Character[]): void => {
+  debouncedSaveCharacters(characters);
 };
 
 export const getConversations = (): Conversation[] => {
@@ -72,8 +83,12 @@ export const getConversations = (): Conversation[] => {
   return stored ? JSON.parse(stored) : [];
 };
 
-export const saveConversations = (conversations: Conversation[]): void => {
+const debouncedSaveConversations = debounce((conversations: Conversation[]) => {
   localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+}, 300);
+
+export const saveConversations = (conversations: Conversation[]): void => {
+  debouncedSaveConversations(conversations);
 };
 
 export const exportData = (): ExportData => {
