@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { MessageSquare, Plus, User, Settings, Download, Upload, Moon, Sun, Trash2 } from 'lucide-react';
+import { useState, memo } from 'react';
+import { MessageSquare, Plus, User, Settings, Download, Upload, Moon, Sun, Trash2, Search, X } from 'lucide-react';
 import { Character, Conversation } from '../types';
 
 interface SidebarProps {
@@ -39,10 +39,24 @@ export const Sidebar = memo(({
   onImport,
   onToggleDarkMode,
 }: SidebarProps) => {
+  const [searchQuery, setSearchQuery] = useState('');
   const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
   const characterConversations = conversations.filter(
     c => c.characterId === selectedCharacterId
   );
+
+  // Filter conversations by search query
+  const filteredConversations = characterConversations.filter((conv) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const title = (conv.title || conv.messages[0]?.content || '').toLowerCase();
+    const hasMatchInMessages = conv.messages.some(msg => 
+      msg.content.toLowerCase().includes(query)
+    );
+    
+    return title.includes(query) || hasMatchInMessages;
+  });
 
   return (
     <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen">
@@ -160,13 +174,33 @@ export const Sidebar = memo(({
                 </button>
               </div>
 
+              {/* Search Input */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search conversations..."
+                  className="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-2">
-                {characterConversations.length === 0 ? (
+                {filteredConversations.length === 0 ? (
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
-                    No conversations yet
+                    {searchQuery ? 'No matching conversations' : 'No conversations yet'}
                   </p>
                 ) : (
-                  characterConversations.map((conversation) => (
+                  filteredConversations.map((conversation) => (
                     <div
                       key={conversation.id}
                       className={`group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
@@ -179,7 +213,7 @@ export const Sidebar = memo(({
                       <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900 dark:text-white truncate">
-                          {conversation.messages[0]?.content.substring(0, 30) || 'New conversation'}...
+                          {conversation.title || conversation.messages[0]?.content.substring(0, 50) || 'New conversation'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {conversation.messages.length} messages

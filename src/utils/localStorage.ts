@@ -8,7 +8,11 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
-  apiKey: '',
+  apiKeys: {
+    openai: '',
+    openrouter: '',
+    anthropic: '',
+  },
   selectedModelId: 'gpt-3.5-turbo',
   selectedCharacterId: '',
   currentConversationId: '',
@@ -16,6 +20,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 'medium',
   renderMarkdown: true,
   autoScroll: true,
+  showTimestamps: true,
   customModels: [],
 };
 
@@ -46,7 +51,19 @@ const DEFAULT_CHARACTERS: Character[] = [
 export const getSettings = (): AppSettings => {
   const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
   if (stored) {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+    const parsed = JSON.parse(stored);
+    
+    // Migration: Convert old single apiKey to new apiKeys object
+    if (parsed.apiKey && typeof parsed.apiKey === 'string') {
+      parsed.apiKeys = {
+        openai: parsed.apiKey,
+        openrouter: '',
+        anthropic: '',
+      };
+      delete parsed.apiKey;
+    }
+    
+    return { ...DEFAULT_SETTINGS, ...parsed };
   }
   return DEFAULT_SETTINGS;
 };

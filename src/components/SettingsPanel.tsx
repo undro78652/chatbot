@@ -81,19 +81,23 @@ export const SettingsPanel = memo(({
                   API Configuration
                 </h3>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">API Key</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {settings.apiKey ? 'Configured' : 'Not configured'}
-                      </p>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Provider API Keys</p>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-1">
+                          <div>OpenAI: {settings.apiKeys.openai ? '✅ Configured' : '❌ Not configured'}</div>
+                          <div>OpenRouter: {settings.apiKeys.openrouter ? '✅ Configured' : '❌ Not configured'}</div>
+                          <div>Anthropic: {settings.apiKeys.anthropic ? '✅ Configured' : '❌ Not configured'}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={onOpenApiKeyModal}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                      >
+                        Manage Keys
+                      </button>
                     </div>
-                    <button
-                      onClick={onOpenApiKeyModal}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                    >
-                      {settings.apiKey ? 'Update' : 'Add Key'}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -236,24 +240,43 @@ export const SettingsPanel = memo(({
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                   <ArrowDownToLine className="w-5 h-5" />
-                  Theme
+                  Display Options
                 </h3>
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Dark Mode</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Use dark color scheme
-                    </p>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Show Timestamps</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Display message timestamps
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.showTimestamps}
+                        onChange={(e) => onUpdateSettings({ showTimestamps: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.darkMode}
-                      onChange={(e) => onUpdateSettings({ darkMode: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                  </label>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Dark Mode</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Use dark color scheme
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.darkMode}
+                        onChange={(e) => onUpdateSettings({ darkMode: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

@@ -6,7 +6,8 @@ import { ApiKeyModal } from './components/ApiKeyModal';
 import { CharacterModal } from './components/CharacterModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CustomModelModal } from './components/CustomModelModal';
-import { Character, Conversation, Message, AIModel, AppSettings } from './types';
+import { ConversationSettingsModal } from './components/ConversationSettingsModal';
+import { Character, Conversation, Message, AIModel, AppSettings, ConversationSettings } from './types';
 import {
   getSettings,
   saveSettings,
@@ -17,6 +18,7 @@ import {
 } from './utils/localStorage';
 import { sendMessageToAI } from './utils/aiService';
 import { handleExport, handleImport } from './utils/importExport';
+import { generateConversationTitle } from './utils/titleGenerator';
 
 const DEFAULT_AI_MODELS: AIModel[] = [
   {
@@ -49,6 +51,24 @@ const DEFAULT_AI_MODELS: AIModel[] = [
     description: 'Most capable via OpenRouter',
     provider: 'openrouter',
   },
+  {
+    id: 'claude-3-5-sonnet-20241022',
+    name: 'Claude 3.5 Sonnet',
+    description: 'Most intelligent Claude model',
+    provider: 'anthropic',
+  },
+  {
+    id: 'claude-3-opus-20240229',
+    name: 'Claude 3 Opus',
+    description: 'Powerful model for complex tasks',
+    provider: 'anthropic',
+  },
+  {
+    id: 'claude-3-haiku-20240307',
+    name: 'Claude 3 Haiku',
+    description: 'Fastest and most compact Claude model',
+    provider: 'anthropic',
+  },
 ];
 
 function App() {
@@ -62,6 +82,8 @@ function App() {
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
   const [editingModel, setEditingModel] = useState<AIModel | undefined>();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isConversationSettingsOpen, setIsConversationSettingsOpen] = useState(false);
 
   // Memoized computations - only recalculate when dependencies change
   const allModels = useMemo(
@@ -111,12 +133,8 @@ function App() {
     });
   }, []);
 
-  const handleSaveApiKey = useCallback((apiKey: string, provider: 'openai' | 'openrouter') => {
-    const defaultModel = DEFAULT_AI_MODELS.find((m) => m.provider === provider);
-    updateSettings({
-      apiKey,
-      selectedModelId: defaultModel?.id,
-    });
+  const handleSaveApiKeys = useCallback((apiKeys: { openai: string; openrouter: string; anthropic: string }) => {
+    updateSettings({ apiKeys });
   }, [updateSettings]);
 
   const createNewConversation = useCallback((characterId?: string) => {
@@ -243,11 +261,11 @@ function App() {
     });
   }, [updateSettings, createNewConversation]);
 
-  const updateConversation = useCallback((conversationId: string, messages: Message[]) => {
+  const updateConversation = useCallback((conversationId: string, messages: Message[], title?: string) => {
     setConversations((current) => {
       const newConversations = current.map((c) =>
         c.id === conversationId
-          ? { ...c, messages, updatedAt: Date.now() }
+          ? { ...c, messages, updatedAt: Date.now(), ...(title && { title }) }
           : c
       );
       saveConversations(newConversations);
@@ -259,7 +277,19 @@ function App() {
     if (!currentConversation || !currentCharacter) return;
 
     setSettings((currentSettings) => {
-      if (!currentSettings.apiKey) return currentSettings;
+      // Get the correct API key based on the model's provider
+      const providerKey = selectedModel.provider === 'openai' 
+        ? currentSettings.apiKeys.openai
+        : selectedModel.provider === 'openrouter'
+        ? currentSettings.apiKeys.openrouter
+        : selectedModel.provider === 'anthropic'
+        ? currentSettings.apiKeys.anthropic
+        : '';
+
+      if (!providerKey) {
+        alert(`Please configure an API key for ${selectedModel.provider} in settings.`);
+        return currentSettings;
+      }
 
       const userMessage: Message = {
         id: `msg-${uuidv4()}`,
@@ -269,14 +299,23 @@ function App() {
       };
 
       const updatedMessages = [...currentConversation.messages, userMessage];
-      updateConversation(currentConversation.id, updatedMessages);
+      
+      // Generate title if this is the first user message
+      const isFirstMessage = currentConversation.messages.length === 0;
+      const title = isFirstMessage ? generateConversationTitle(content) : undefined;
+      
+      updateConversation(currentConversation.id, updatedMessages, title);
 
       setIsLoading(true);
 
+      // Use conversation settings if available
+      const convSettings = currentConversation.settings || {};
+      const systemPrompt = convSettings.systemPromptOverride || currentCharacter.systemPrompt || 'You are a helpful assistant.';
+      
       const systemMessage: Message = {
         id: `sys-${uuidv4()}`,
         role: 'system',
-        content: currentCharacter.systemPrompt || 'You are a helpful assistant.',
+        content: systemPrompt,
         timestamp: Date.now(),
       };
 
@@ -284,10 +323,12 @@ function App() {
       
       sendMessageToAI(
         messagesToSend,
-        currentSettings.apiKey,
+        providerKey,
         selectedModel.id,
         selectedModel.provider,
-        selectedModel.endpoint
+        selectedModel.endpoint,
+        convSettings.temperature,
+        convSettings.maxTokens
       ).then((response) => {
         setIsLoading(false);
 
@@ -336,6 +377,92 @@ function App() {
 
     await handleSendMessage(message.content);
   }, [currentConversation, updateConversation, handleSendMessage]);
+
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    if (!currentConversation) return;
+
+    const messageIndex = currentConversation.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const message = currentConversation.messages[messageIndex];
+    const idsToDelete: string[] = [messageId];
+
+    // If deleting user message, also delete the next assistant message
+    if (message.role === 'user' && messageIndex < currentConversation.messages.length - 1) {
+      const nextMessage = currentConversation.messages[messageIndex + 1];
+      if (nextMessage.role === 'assistant') {
+        idsToDelete.push(nextMessage.id);
+      }
+    }
+
+    // If deleting assistant message, also delete the previous user message
+    if (message.role === 'assistant' && messageIndex > 0) {
+      const prevMessage = currentConversation.messages[messageIndex - 1];
+      if (prevMessage.role === 'user') {
+        idsToDelete.push(prevMessage.id);
+      }
+    }
+
+    // Filter out all messages to delete
+    const updatedMessages = currentConversation.messages.filter(
+      (msg) => !idsToDelete.includes(msg.id)
+    );
+
+    updateConversation(currentConversation.id, updatedMessages);
+  }, [currentConversation, updateConversation]);
+
+  const handleImportMessages = useCallback((importedMessages: { role: string; content: string }[]) => {
+    if (!currentConversation) return;
+
+    const newMessages: Message[] = importedMessages.map((msg) => ({
+      id: `msg-${uuidv4()}`,
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: msg.content,
+      timestamp: Date.now(),
+    }));
+
+    const updatedMessages = [...currentConversation.messages, ...newMessages];
+    updateConversation(currentConversation.id, updatedMessages);
+  }, [currentConversation, updateConversation]);
+
+  const handleSaveConversationSettings = useCallback((conversationSettings: ConversationSettings) => {
+    if (!currentConversation) return;
+
+    setConversations((current) => {
+      const newConversations = current.map((c) =>
+        c.id === currentConversation.id
+          ? { ...c, settings: conversationSettings }
+          : c
+      );
+      saveConversations(newConversations);
+      return newConversations;
+    });
+  }, [currentConversation]);
+
+  const handleExportConversation = useCallback(() => {
+    if (!currentConversation || !currentCharacter) return;
+
+    const exportData = {
+      character: currentCharacter.name,
+      model: selectedModel.name,
+      exportDate: new Date().toISOString(),
+      messages: currentConversation.messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversation-${currentCharacter.name}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [currentConversation, currentCharacter, selectedModel]);
 
   const handleExportData = useCallback(() => {
     handleExport();
@@ -389,26 +516,32 @@ function App() {
     setIsCustomModelModalOpen(true);
   }, []);
 
+  const handleToggleDarkMode = useCallback(() => {
+    updateSettings({ darkMode: !settings.darkMode });
+  }, [updateSettings, settings.darkMode]);
+
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar
-        characters={characters}
-        conversations={conversations}
-        selectedCharacterId={settings.selectedCharacterId}
-        currentConversationId={settings.currentConversationId}
-        darkMode={settings.darkMode}
-        onSelectCharacter={handleSelectCharacter}
-        onSelectConversation={handleSelectConversation}
-        onNewConversation={() => createNewConversation()}
-        onNewCharacter={() => handleOpenCharacterModal()}
-        onEditCharacter={handleOpenCharacterModal}
-        onDeleteCharacter={handleDeleteCharacter}
-        onDeleteConversation={handleDeleteConversation}
-        onOpenSettings={() => setIsSettingsPanelOpen(true)}
-        onExport={handleExportData}
-        onImport={handleImportData}
-        onToggleDarkMode={() => updateSettings({ darkMode: !settings.darkMode })}
-      />
+      {isSidebarOpen && (
+        <Sidebar
+          characters={characters}
+          conversations={conversations}
+          selectedCharacterId={settings.selectedCharacterId}
+          currentConversationId={settings.currentConversationId}
+          darkMode={settings.darkMode}
+          onSelectCharacter={handleSelectCharacter}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={() => createNewConversation()}
+          onNewCharacter={() => handleOpenCharacterModal()}
+          onEditCharacter={handleOpenCharacterModal}
+          onDeleteCharacter={handleDeleteCharacter}
+          onDeleteConversation={handleDeleteConversation}
+          onOpenSettings={() => setIsSettingsPanelOpen(true)}
+          onExport={handleExportData}
+          onImport={handleImportData}
+          onToggleDarkMode={handleToggleDarkMode}
+        />
+      )}
 
       <ChatInterface
         messages={currentConversation?.messages || []}
@@ -416,22 +549,36 @@ function App() {
         selectedModel={selectedModel}
         models={allModels}
         isLoading={isLoading}
-        hasApiKey={!!settings.apiKey}
+        hasApiKey={!!(settings.apiKeys.openai || settings.apiKeys.openrouter || settings.apiKeys.anthropic)}
         renderMarkdown={settings.renderMarkdown}
         autoScroll={settings.autoScroll}
+        showTimestamps={settings.showTimestamps}
         fontSize={settings.fontSize}
         onSendMessage={handleSendMessage}
         onSelectModel={(modelId) => updateSettings({ selectedModelId: modelId })}
         onOpenSettings={() => setIsSettingsPanelOpen(true)}
         onEditMessage={handleEditMessage}
         onResendMessage={handleResendMessage}
+        onDeleteMessage={handleDeleteMessage}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onImportMessages={handleImportMessages}
+        onExportConversation={handleExportConversation}
+        onOpenConversationSettings={() => setIsConversationSettingsOpen(true)}
+      />
+
+      <ConversationSettingsModal
+        isOpen={isConversationSettingsOpen}
+        onClose={() => setIsConversationSettingsOpen(false)}
+        onSave={handleSaveConversationSettings}
+        currentSettings={currentConversation?.settings || {}}
+        characterSystemPrompt={currentCharacter?.systemPrompt || ''}
       />
 
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
-        onSave={handleSaveApiKey}
-        currentApiKey={settings.apiKey}
+        onSave={handleSaveApiKeys}
+        currentApiKeys={settings.apiKeys}
       />
 
       <CharacterModal

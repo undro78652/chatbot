@@ -1,52 +1,25 @@
 import { useState, memo } from 'react';
-import { X, Key, AlertCircle, CheckCircle } from 'lucide-react';
-import { validateApiKey } from '../utils/aiService';
+import { X, Key, CheckCircle } from 'lucide-react';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (apiKey: string, provider: 'openai' | 'openrouter') => void;
-  currentApiKey: string;
+  onSave: (apiKeys: { openai: string; openrouter: string; anthropic: string }) => void;
+  currentApiKeys: { openai: string; openrouter: string; anthropic: string };
 }
 
-export const ApiKeyModal = memo(({ isOpen, onClose, onSave, currentApiKey }: ApiKeyModalProps) => {
-  const [apiKey, setApiKey] = useState(currentApiKey);
-  const [provider, setProvider] = useState<'openai' | 'openrouter'>('openai');
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationStatus, setValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
-  const [error, setError] = useState('');
+export const ApiKeyModal = memo(({ isOpen, onClose, onSave, currentApiKeys }: ApiKeyModalProps) => {
+  const [apiKeys, setApiKeys] = useState(currentApiKeys);
 
   if (!isOpen) return null;
 
-  const handleValidate = async () => {
-    if (!apiKey.trim()) {
-      setError('Please enter an API key');
-      return;
-    }
-
-    setIsValidating(true);
-    setError('');
-    setValidationStatus('idle');
-
-    const isValid = await validateApiKey(apiKey, provider);
-
-    setIsValidating(false);
-    if (isValid) {
-      setValidationStatus('valid');
-      setError('');
-    } else {
-      setValidationStatus('invalid');
-      setError('Invalid API key. Please check your key and try again.');
-    }
+  const handleSave = () => {
+    onSave(apiKeys);
+    onClose();
   };
 
-  const handleSave = () => {
-    if (!apiKey.trim()) {
-      setError('Please enter an API key');
-      return;
-    }
-    onSave(apiKey, provider);
-    onClose();
+  const updateKey = (provider: 'openai' | 'openrouter' | 'anthropic', value: string) => {
+    setApiKeys(prev => ({ ...prev, [provider]: value }));
   };
 
   return (
@@ -65,94 +38,114 @@ export const ApiKeyModal = memo(({ isOpen, onClose, onSave, currentApiKey }: Api
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-5">
+          {/* OpenAI API Key */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Provider
-            </label>
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as 'openai' | 'openrouter')}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="openai">OpenAI</option>
-              <option value="openrouter">OpenRouter</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              API Key
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                OpenAI API Key
+              </label>
+              {apiKeys.openai && (
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  <span>Configured</span>
+                </div>
+              )}
+            </div>
             <input
               type="password"
-              value={apiKey}
-              onChange={(e) => {
-                setApiKey(e.target.value);
-                setValidationStatus('idle');
-                setError('');
-              }}
-              placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : 'OpenRouter'} API key`}
+              value={apiKeys.openai}
+              onChange={(e) => updateKey('openai', e.target.value)}
+              placeholder="sk-..."
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            <a
+              href="https://platform.openai.com/api-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
+            >
+              Get your OpenAI API key →
+            </a>
           </div>
 
-          {validationStatus === 'valid' && (
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
-              <CheckCircle className="w-4 h-4" />
-              <span>API key is valid</span>
+          {/* OpenRouter API Key */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                OpenRouter API Key
+              </label>
+              {apiKeys.openrouter && (
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  <span>Configured</span>
+                </div>
+              )}
             </div>
-          )}
+            <input
+              type="password"
+              value={apiKeys.openrouter}
+              onChange={(e) => updateKey('openrouter', e.target.value)}
+              placeholder="sk-or-..."
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
+            >
+              Get your OpenRouter API key →
+            </a>
+          </div>
 
-          {error && (
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
-              <AlertCircle className="w-4 h-4" />
-              <span>{error}</span>
+          {/* Anthropic API Key */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Anthropic API Key
+              </label>
+              {apiKeys.anthropic && (
+                <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  <span>Configured</span>
+                </div>
+              )}
             </div>
-          )}
+            <input
+              type="password"
+              value={apiKeys.anthropic}
+              onChange={(e) => updateKey('anthropic', e.target.value)}
+              placeholder="sk-ant-..."
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
+            >
+              Get your Anthropic API key →
+            </a>
+          </div>
 
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            <p className="mb-2">Your API key is stored locally in your browser and never sent to our servers.</p>
-            <p>Get your API key from:</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li>
-                <a
-                  href="https://platform.openai.com/api-keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  OpenAI Dashboard
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://openrouter.ai/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  OpenRouter Dashboard
-                </a>
-              </li>
-            </ul>
+          <div className="text-sm text-gray-600 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p>🔒 Your API keys are stored locally in your browser and never sent to our servers.</p>
           </div>
         </div>
 
         <div className="flex gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={handleValidate}
-            disabled={isValidating || !apiKey.trim()}
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            {isValidating ? 'Validating...' : 'Validate Key'}
+            Cancel
           </button>
           <button
             onClick={handleSave}
-            disabled={!apiKey.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Save
+            Save All Keys
           </button>
         </div>
       </div>

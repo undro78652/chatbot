@@ -13,25 +13,37 @@ export interface Character {
   avatarColor: string;
 }
 
+export interface ConversationSettings {
+  temperature?: number;
+  systemPromptOverride?: string;
+  maxTokens?: number;
+}
+
 export interface Conversation {
   id: string;
   characterId: string;
   messages: Message[];
   createdAt: number;
   updatedAt: number;
+  title?: string;
+  settings?: ConversationSettings;
 }
 
 export interface AIModel {
   id: string;
   name: string;
   description: string;
-  provider: 'openai' | 'openrouter' | 'custom';
+  provider: 'openai' | 'openrouter' | 'anthropic' | 'custom';
   endpoint?: string;
   isCustom?: boolean;
 }
 
 export interface AppSettings {
-  apiKey: string;
+  apiKeys: {
+    openai: string;
+    openrouter: string;
+    anthropic: string;
+  };
   selectedModelId: string;
   selectedCharacterId: string;
   currentConversationId: string;
@@ -39,6 +51,7 @@ export interface AppSettings {
   fontSize: 'small' | 'medium' | 'large';
   renderMarkdown: boolean;
   autoScroll: boolean;
+  showTimestamps: boolean;
   customModels: AIModel[];
 }
 
