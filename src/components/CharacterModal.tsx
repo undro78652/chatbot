@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { X, User, Palette } from 'lucide-react';
 import { Character } from '../types';
 
@@ -40,7 +41,7 @@ export const CharacterModal = ({ isOpen, onClose, onSave, character }: Character
     if (!name.trim()) return;
 
     const newCharacter: Character = {
-      id: character?.id || `character-${Date.now()}`,
+      id: character?.id || `character-${uuidv4()}`,
       name: name.trim(),
       description: description.trim(),
       systemPrompt: systemPrompt.trim(),

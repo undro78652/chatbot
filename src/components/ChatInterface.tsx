@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Settings as SettingsIcon, Edit2, RotateCcw, Search } from 'lucide-react';
+import { Send, Loader2, Settings as SettingsIcon, Edit2, RotateCcw } from 'lucide-react';
 import { Message, Character, AIModel } from '../types';
 import { MarkdownMessage } from './MarkdownMessage';
 
@@ -37,7 +37,6 @@ export const ChatInterface = ({
   onResendMessage,
 }: ChatInterfaceProps) => {
   const [input, setInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,19 +92,6 @@ export const ChatInterface = ({
   return (
     <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-        {searchQuery && (
-          <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center justify-between">
-            <p className="text-sm text-gray-900 dark:text-white">
-              Searching: <span className="font-medium">{searchQuery}</span>
-            </p>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
@@ -125,13 +111,6 @@ export const ChatInterface = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSearchQuery(searchQuery ? '' : ' ')}
-              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label="Search messages"
-            >
-              <Search className="w-5 h-5" />
-            </button>
             <select
               value={selectedModel.id}
               onChange={(e) => onSelectModel(e.target.value)}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Sidebar } from './components/Sidebar';
 import { ChatInterface } from './components/ChatInterface';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { CharacterModal } from './components/CharacterModal';
-import { ModelSelector } from './components/ModelSelector';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CustomModelModal } from './components/CustomModelModal';
 import { Character, Conversation, Message, AIModel, AppSettings } from './types';
@@ -17,7 +17,6 @@ import {
 } from './utils/localStorage';
 import { sendMessageToAI } from './utils/aiService';
 import { handleExport, handleImport } from './utils/importExport';
-import { downloadJson } from './utils/importExport';
 
 const DEFAULT_AI_MODELS: AIModel[] = [
   {
@@ -58,7 +57,6 @@ function App() {
   const [conversations, setConversations] = useState<Conversation[]>(getConversations());
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isCharacterModalOpen, setIsCharacterModalOpen] = useState(false);
-  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isCustomModelModalOpen, setIsCustomModelModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
@@ -121,7 +119,7 @@ function App() {
     if (!charId) return;
 
     const newConversation: Conversation = {
-      id: `conversation-${Date.now()}`,
+      id: `conversation-${uuidv4()}`,
       characterId: charId,
       messages: [],
       createdAt: Date.now(),
@@ -193,7 +191,7 @@ function App() {
     if (!currentConversation || !currentCharacter || !settings.apiKey) return;
 
     const userMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${uuidv4()}`,
       role: 'user',
       content,
       timestamp: Date.now(),
@@ -205,7 +203,7 @@ function App() {
     setIsLoading(true);
 
     const systemMessage: Message = {
-      id: `sys-${Date.now()}`,
+      id: `sys-${uuidv4()}`,
       role: 'system',
       content: currentCharacter.systemPrompt || 'You are a helpful assistant.',
       timestamp: Date.now(),
@@ -224,7 +222,7 @@ function App() {
 
     if (response.error) {
       const errorMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${uuidv4()}`,
         role: 'assistant',
         content: `Error: ${response.error}`,
         timestamp: Date.now(),
@@ -232,7 +230,7 @@ function App() {
       updateConversation(currentConversation.id, [...updatedMessages, errorMessage]);
     } else {
       const assistantMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${uuidv4()}`,
         role: 'assistant',
         content: response.content,
         timestamp: Date.now(),
@@ -276,22 +274,6 @@ function App() {
 
   const handleExportData = () => {
     handleExport();
-  };
-
-  const handleExportCharacter = (characterId: string) => {
-    const character = characters.find((c) => c.id === characterId);
-    if (!character) return;
-
-    const characterConversations = conversations.filter((c) => c.characterId === characterId);
-    const exportData = {
-      version: '1.0',
-      exportDate: Date.now(),
-      character,
-      conversations: characterConversations,
-    };
-
-    const timestamp = new Date().toISOString().split('T')[0];
-    downloadJson(exportData, `${character.name.toLowerCase().replace(/\s+/g, '-')}-export-${timestamp}.json`);
   };
 
   const handleImportData = async () => {
@@ -392,14 +374,6 @@ function App() {
         }}
         onSave={handleSaveCharacter}
         character={editingCharacter}
-      />
-
-      <ModelSelector
-        isOpen={isModelSelectorOpen}
-        onClose={() => setIsModelSelectorOpen(false)}
-        models={allModels}
-        selectedModelId={settings.selectedModelId}
-        onSelectModel={(modelId) => updateSettings({ selectedModelId: modelId })}
       />
 
       <SettingsPanel

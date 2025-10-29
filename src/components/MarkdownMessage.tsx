@@ -18,18 +18,18 @@ export const MarkdownMessage = ({ message, renderMarkdown, isUser }: MarkdownMes
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code: ({ node, inline, className, children, ...props }) => {
-            const match = /language-(\w+)/.exec(className || '');
-            return !inline ? (
+          code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) => {
+            const isInline = !className?.includes('language-');
+            return isInline ? (
+              <code className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm" {...props}>
+                {children}
+              </code>
+            ) : (
               <pre className="bg-gray-800 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto my-2">
                 <code className={`text-gray-100 text-sm ${className || ''}`} {...props}>
                   {children}
                 </code>
               </pre>
-            ) : (
-              <code className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm" {...props}>
-                {children}
-              </code>
             );
           },
           pre: ({ children }) => <>{children}</>,
