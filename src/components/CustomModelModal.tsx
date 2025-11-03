@@ -14,6 +14,7 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
   const [description, setDescription] = useState('');
   const [modelId, setModelId] = useState('');
   const [endpoint, setEndpoint] = useState('');
+  const [provider, setProvider] = useState<'openai' | 'openrouter' | 'anthropic' | 'custom'>('openai');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -22,11 +23,13 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
       setDescription(model.description);
       setModelId(model.id);
       setEndpoint(model.endpoint || '');
+      setProvider(model.provider);
     } else {
       setName('');
       setDescription('');
       setModelId('');
       setEndpoint('');
+      setProvider('openai');
     }
     setError('');
   }, [model, isOpen]);
@@ -40,6 +43,10 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
     }
     if (!modelId.trim()) {
       setError('Model ID is required');
+      return false;
+    }
+    if (provider === 'custom' && !endpoint.trim()) {
+      setError('Custom API endpoint is required for custom provider');
       return false;
     }
     if (endpoint && !isValidUrl(endpoint)) {
@@ -65,8 +72,8 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
       id: modelId.trim(),
       name: name.trim(),
       description: description.trim(),
-      provider: 'custom',
-      endpoint: endpoint.trim() || undefined,
+      provider: provider,
+      endpoint: provider === 'custom' ? endpoint.trim() : undefined,
       isCustom: true,
     };
 
@@ -94,6 +101,31 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
         </div>
 
         <div className="p-6 space-y-4">
+          <div>
+            <label htmlFor="model-provider" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Provider *
+            </label>
+            <select
+              id="model-provider"
+              value={provider}
+              onChange={(e) => {
+                setProvider(e.target.value as 'openai' | 'openrouter' | 'anthropic' | 'custom');
+                setError('');
+              }}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="custom">Custom</option>
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {provider === 'custom' 
+                ? 'Custom provider requires a custom API endpoint'
+                : `Will use your configured ${provider.charAt(0).toUpperCase() + provider.slice(1)} API key`}
+            </p>
+          </div>
+
           <div>
             <label htmlFor="model-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Model Name *
@@ -145,25 +177,27 @@ export const CustomModelModal = memo(({ isOpen, onClose, onSave, model }: Custom
             />
           </div>
 
-          <div>
-            <label htmlFor="model-endpoint" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Custom API Endpoint (Optional)
-            </label>
-            <input
-              id="model-endpoint"
-              type="url"
-              value={endpoint}
-              onChange={(e) => {
-                setEndpoint(e.target.value);
-                setError('');
-              }}
-              placeholder="https://api.example.com/v1/chat/completions"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Leave empty to use OpenAI-compatible endpoint format
-            </p>
-          </div>
+          {provider === 'custom' && (
+            <div>
+              <label htmlFor="model-endpoint" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Custom API Endpoint *
+              </label>
+              <input
+                id="model-endpoint"
+                type="url"
+                value={endpoint}
+                onChange={(e) => {
+                  setEndpoint(e.target.value);
+                  setError('');
+                }}
+                placeholder="https://api.example.com/v1/chat/completions"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Enter the full API endpoint URL for your custom provider
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">

@@ -145,6 +145,72 @@ export const SettingsPanel = memo(({
                   </div>
                 </div>
               </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <ArrowDownToLine className="w-5 h-5" />
+                  Conversation Management
+                </h3>
+                <div className="space-y-4">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-4">
+                    <div>
+                      <label htmlFor="autoSummarizeThreshold" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        Auto-summarize at (tokens)
+                      </label>
+                      <input
+                        type="number"
+                        id="autoSummarizeThreshold"
+                        value={settings.autoSummarizeThreshold}
+                        onChange={(e) => onUpdateSettings({ autoSummarizeThreshold: parseInt(e.target.value) || 6000 })}
+                        min="1000"
+                        max="20000"
+                        step="1000"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Automatically compress old messages when conversation exceeds this token count
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="keepRecentMessages" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        Keep recent messages
+                      </label>
+                      <input
+                        type="number"
+                        id="keepRecentMessages"
+                        value={settings.keepRecentMessages}
+                        onChange={(e) => onUpdateSettings({ keepRecentMessages: parseInt(e.target.value) || 25 })}
+                        min="10"
+                        max="100"
+                        step="5"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Number of recent messages to keep in full detail (not summarized)
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Show summarization notifications</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Display toast notifications when conversations are auto-summarized
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.showSummarizeNotifications}
+                          onChange={(e) => onUpdateSettings({ showSummarizeNotifications: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

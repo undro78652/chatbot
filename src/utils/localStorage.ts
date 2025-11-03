@@ -22,6 +22,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoScroll: true,
   showTimestamps: true,
   customModels: [],
+  autoSummarizeThreshold: 6000,
+  keepRecentMessages: 25,
+  showSummarizeNotifications: true,
 };
 
 const DEFAULT_CHARACTERS: Character[] = [

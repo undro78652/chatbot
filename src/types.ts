@@ -19,6 +19,14 @@ export interface ConversationSettings {
   maxTokens?: number;
 }
 
+export interface Summary {
+  id: string;
+  content: string;
+  messageRange: [number, number];
+  tokensSaved: number;
+  timestamp: number;
+}
+
 export interface Conversation {
   id: string;
   characterId: string;
@@ -27,6 +35,9 @@ export interface Conversation {
   updatedAt: number;
   title?: string;
   settings?: ConversationSettings;
+  summaries?: Summary[];
+  lastSummarizedIndex?: number;
+  autoSummarize?: boolean;
 }
 
 export interface AIModel {
@@ -53,6 +64,9 @@ export interface AppSettings {
   autoScroll: boolean;
   showTimestamps: boolean;
   customModels: AIModel[];
+  autoSummarizeThreshold: number;
+  keepRecentMessages: number;
+  showSummarizeNotifications: boolean;
 }
 
 export interface ExportData {

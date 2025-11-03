@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, memo, useMemo } from 'react';
 import { Send, Loader2, Settings as SettingsIcon, Edit2, RotateCcw, Trash2, Menu, Upload, X, Copy, Check, Download, Sliders } from 'lucide-react';
 import { Message, Character, AIModel } from '../types';
 import { MarkdownMessage } from './MarkdownMessage';
-import { estimateMessagesTokenCount, getTokenColorClass } from '../utils/tokenCounter';
+import { estimateMessagesTokenCount, getTokenColorClass, estimateConversationTokens } from '../utils/tokenCounter';
+import { Conversation } from '../types';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -15,6 +16,8 @@ interface ChatInterfaceProps {
   autoScroll: boolean;
   showTimestamps: boolean;
   fontSize: string;
+  conversation: Conversation | undefined;
+  autoSummarizeThreshold: number;
   onSendMessage: (content: string) => void;
   onSelectModel: (modelId: string) => void;
   onOpenSettings: () => void;
@@ -38,6 +41,8 @@ export const ChatInterface = memo(({
   autoScroll,
   showTimestamps,
   fontSize,
+  conversation,
+  autoSummarizeThreshold,
   onSendMessage,
   onSelectModel,
   onOpenSettings,
@@ -123,10 +128,19 @@ export const ChatInterface = memo(({
     }
   };
 
-  // Calculate token count for current conversation
+  // Calculate token count for current conversation (including summaries if present)
   const tokenCount = useMemo(() => {
+    if (conversation && conversation.summaries && conversation.summaries.length > 0) {
+      return estimateConversationTokens(conversation);
+    }
     return estimateMessagesTokenCount(messages.map(m => ({ role: m.role, content: m.content })));
-  }, [messages]);
+  }, [messages, conversation]);
+
+  // Calculate total tokens saved by summarization
+  const totalTokensSaved = useMemo(() => {
+    if (!conversation?.summaries) return 0;
+    return conversation.summaries.reduce((sum, s) => sum + s.tokensSaved, 0);
+  }, [conversation]);
 
   if (!character) {
     return (
@@ -207,6 +221,14 @@ export const ChatInterface = memo(({
             }`}>
               {selectedModel.provider.toUpperCase()}
             </span>
+            {conversation?.summaries && conversation.summaries.length > 0 && (
+              <span 
+                className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                title={`${conversation.summaries.length} summaries active, ${totalTokensSaved} tokens saved`}
+              >
+                💾 {conversation.summaries.length} summaries
+              </span>
+            )}
             <button
               onClick={() => setIsImportModalOpen(true)}
               className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -415,10 +437,21 @@ export const ChatInterface = memo(({
       <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
         {/* Token Counter */}
         <div className="flex items-center justify-between mb-3 px-1">
-          <div className={`text-xs font-medium ${getTokenColorClass(tokenCount)}`}>
-            <span className="mr-1">📊</span>
-            {tokenCount.toLocaleString()} tokens
-            {tokenCount > 8000 && <span className="ml-2 text-orange-600 dark:text-orange-400">(Approaching context limit)</span>}
+          <div className="flex flex-col gap-1">
+            <div className={`text-xs font-medium ${getTokenColorClass(tokenCount)}`}>
+              <span className="mr-1">📊</span>
+              {tokenCount.toLocaleString()} tokens
+              {conversation?.summaries && conversation.summaries.length > 0 && (
+                <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                  ({totalTokensSaved.toLocaleString()} saved)
+                </span>
+              )}
+            </div>
+            {tokenCount >= autoSummarizeThreshold * 0.7 && (
+              <div className="text-xs text-orange-600 dark:text-orange-400">
+                ⚠️ Approaching summarization threshold ({autoSummarizeThreshold.toLocaleString()} tokens)
+              </div>
+            )}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {tokenCount < 2000 && '✅ Low usage'}

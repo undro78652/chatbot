@@ -23,6 +23,8 @@ export function estimateTokenCount(text: string): number {
   return estimate;
 }
 
+export type TokenWarningLevel = 'safe' | 'warning' | 'critical';
+
 export function estimateMessagesTokenCount(messages: { role: string; content: string }[]): number {
   let total = 0;
   
@@ -49,6 +51,61 @@ export function getTokenColorClass(tokenCount: number): string {
     return 'text-orange-600 dark:text-orange-400';
   } else {
     return 'text-red-600 dark:text-red-400';
+  }
+}
+
+/**
+ * Calculate total tokens for conversation including summaries
+ * This is what would actually be sent to the API
+ * @param conversation - The conversation with potential summaries
+ * @returns Total estimated token count
+ */
+export function estimateConversationTokens(conversation: {
+  messages: { role: string; content: string }[];
+  summaries?: { content: string }[];
+  lastSummarizedIndex?: number;
+}): number {
+  let totalTokens = 0;
+
+  // Add summary tokens
+  if (conversation.summaries && conversation.summaries.length > 0) {
+    totalTokens += conversation.summaries.reduce(
+      (sum, s) => sum + estimateTokenCount(s.content),
+      0
+    );
+    // Add overhead for summary formatting
+    totalTokens += conversation.summaries.length * 10;
+  }
+
+  // Add unsummarized message tokens
+  const startIndex = conversation.lastSummarizedIndex || 0;
+  const unsummarizedMessages = conversation.messages.slice(startIndex);
+  totalTokens += estimateMessagesTokenCount(unsummarizedMessages);
+
+  // Add base overhead for system messages and formatting
+  totalTokens += 50;
+
+  return totalTokens;
+}
+
+/**
+ * Get warning level based on token count and threshold
+ * @param tokenCount - Current token count
+ * @param threshold - Threshold where summarization triggers
+ * @returns Warning level
+ */
+export function getTokenWarningLevel(
+  tokenCount: number,
+  threshold: number
+): TokenWarningLevel {
+  const ratio = tokenCount / threshold;
+
+  if (ratio < 0.7) {
+    return 'safe'; // Less than 70% of threshold
+  } else if (ratio < 0.95) {
+    return 'warning'; // 70-95% of threshold
+  } else {
+    return 'critical'; // 95%+ of threshold
   }
 }
 

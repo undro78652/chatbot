@@ -7,6 +7,7 @@ import { CharacterModal } from './components/CharacterModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CustomModelModal } from './components/CustomModelModal';
 import { ConversationSettingsModal } from './components/ConversationSettingsModal';
+import { Toast } from './components/Toast';
 import { Character, Conversation, Message, AIModel, AppSettings, ConversationSettings } from './types';
 import {
   getSettings,
@@ -19,6 +20,12 @@ import {
 import { sendMessageToAI } from './utils/aiService';
 import { handleExport, handleImport } from './utils/importExport';
 import { generateConversationTitle } from './utils/titleGenerator';
+import {
+  shouldSummarize,
+  generateSummary,
+  buildContextForAPI,
+  createSummary,
+} from './utils/summarizationService';
 
 const DEFAULT_AI_MODELS: AIModel[] = [
   {
@@ -41,13 +48,13 @@ const DEFAULT_AI_MODELS: AIModel[] = [
   },
   {
     id: 'openai/gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo (OpenRouter)',
+    name: 'GPT-3.5 Turbo',
     description: 'Fast and efficient via OpenRouter',
     provider: 'openrouter',
   },
   {
     id: 'openai/gpt-4',
-    name: 'GPT-4 (OpenRouter)',
+    name: 'GPT-4',
     description: 'Most capable via OpenRouter',
     provider: 'openrouter',
   },
@@ -69,6 +76,48 @@ const DEFAULT_AI_MODELS: AIModel[] = [
     description: 'Fastest and most compact Claude model',
     provider: 'anthropic',
   },
+  {
+    id: 'cognitivecomputations/dolphin3.0-mistral-24b',
+    name: 'Dolphin 3.0 Mistral 24B',
+    description: 'Mistral 24B model from Dolphin 3.0',
+    provider: 'openrouter',
+  },
+  {
+    id: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+    name: 'Dolphin Mistral 24B Venice Edition',
+    description: 'Mistral 24B model from Dolphin 3.0 Venice Edition',
+    provider: 'openrouter',
+  },
+  {
+    id: 'nousresearch/hermes-3-llama-3.1-405b',
+    name: 'Hermes 3 Llama 3.1 405B',
+    description: 'Llama 3.1 405B model from Hermes 3',
+    provider: 'openrouter',
+  },
+  {
+    id: 'deepseek/deepseek-chat-v3-0324',
+    name: 'DeepSeek Chat V3 0324',
+    description: 'DeepSeek Chat V3 0324 model from DeepSeek',
+    provider: 'openrouter',
+  },
+  {
+    id: 'thedrummer/rocinante-12b',
+    name: 'Rocinante 12B',
+    description: 'Rocinante 12B model from The Drummer',
+    provider: 'openrouter',
+  },
+  {
+    id: 'thedrummer/anubis-70b-v1.1',
+    name: 'Anubis 70B V1.1',
+    description: 'Anubis 70B V1.1 model from The Drummer',
+    provider: 'openrouter',
+  },
+  {
+    id: 'thedrummer/cydonia-24b-v4.1',
+    name: 'Cydonia 24B V4.1',
+    description: 'Cydonia 24B V4.1 model from The Drummer',
+    provider: 'openrouter',
+  },
 ];
 
 function App() {
@@ -84,6 +133,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isConversationSettingsOpen, setIsConversationSettingsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
 
   // Memoized computations - only recalculate when dependencies change
   const allModels = useMemo(
@@ -131,6 +182,11 @@ function App() {
       saveSettings(newSettings);
       return newSettings;
     });
+  }, []);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToastMessage(message);
+    setToastType(type);
   }, []);
 
   const handleSaveApiKeys = useCallback((apiKeys: { openai: string; openrouter: string; anthropic: string }) => {
@@ -273,87 +329,153 @@ function App() {
     });
   }, []);
 
-  const handleSendMessage = useCallback(async (content: string) => {
-    if (!currentConversation || !currentCharacter) return;
+  const handleAutoSummarize = useCallback(async (conversation: Conversation) => {
+    try {
+      const startIndex = conversation.lastSummarizedIndex || 0;
+      const messagesToSummarize = Math.min(20, conversation.messages.length - startIndex - settings.keepRecentMessages);
+      
+      if (messagesToSummarize < 10) {
+        // Not enough messages to summarize
+        return;
+      }
 
-    setSettings((currentSettings) => {
-      // Get the correct API key based on the model's provider
-      const providerKey = selectedModel.provider === 'openai' 
-        ? currentSettings.apiKeys.openai
+      const endIndex = startIndex + messagesToSummarize;
+      const messages = conversation.messages.slice(startIndex, endIndex);
+
+      // Get the API key for the selected model's provider
+      const providerKey = selectedModel.provider === 'openai'
+        ? settings.apiKeys.openai
         : selectedModel.provider === 'openrouter'
-        ? currentSettings.apiKeys.openrouter
+        ? settings.apiKeys.openrouter
         : selectedModel.provider === 'anthropic'
-        ? currentSettings.apiKeys.anthropic
+        ? settings.apiKeys.anthropic
         : '';
 
       if (!providerKey) {
-        alert(`Please configure an API key for ${selectedModel.provider} in settings.`);
-        return currentSettings;
+        console.error('No API key for summarization');
+        return;
       }
 
-      const userMessage: Message = {
-        id: `msg-${uuidv4()}`,
-        role: 'user',
-        content,
-        timestamp: Date.now(),
-      };
-
-      const updatedMessages = [...currentConversation.messages, userMessage];
-      
-      // Generate title if this is the first user message
-      const isFirstMessage = currentConversation.messages.length === 0;
-      const title = isFirstMessage ? generateConversationTitle(content) : undefined;
-      
-      updateConversation(currentConversation.id, updatedMessages, title);
-
-      setIsLoading(true);
-
-      // Use conversation settings if available
-      const convSettings = currentConversation.settings || {};
-      const systemPrompt = convSettings.systemPromptOverride || currentCharacter.systemPrompt || 'You are a helpful assistant.';
-      
-      const systemMessage: Message = {
-        id: `sys-${uuidv4()}`,
-        role: 'system',
-        content: systemPrompt,
-        timestamp: Date.now(),
-      };
-
-      const messagesToSend = [systemMessage, ...updatedMessages];
-      
-      sendMessageToAI(
-        messagesToSend,
+      // Generate summary using the same model
+      const summaryContent = await generateSummary(
+        messages,
         providerKey,
         selectedModel.id,
         selectedModel.provider,
-        selectedModel.endpoint,
-        convSettings.temperature,
-        convSettings.maxTokens
-      ).then((response) => {
-        setIsLoading(false);
+        selectedModel.endpoint
+      );
 
-        if (response.error) {
-          const errorMessage: Message = {
-            id: `msg-${uuidv4()}`,
-            role: 'assistant',
-            content: `Error: ${response.error}`,
-            timestamp: Date.now(),
-          };
-          updateConversation(currentConversation.id, [...updatedMessages, errorMessage]);
-        } else {
-          const assistantMessage: Message = {
-            id: `msg-${uuidv4()}`,
-            role: 'assistant',
-            content: response.content,
-            timestamp: Date.now(),
-          };
-          updateConversation(currentConversation.id, [...updatedMessages, assistantMessage]);
-        }
+      // Create summary object
+      const summary = createSummary([startIndex, endIndex], summaryContent, messages);
+
+      // Update conversation with new summary
+      setConversations((current) => {
+        const updated = current.map((c) =>
+          c.id === conversation.id
+            ? {
+                ...c,
+                summaries: [...(c.summaries || []), summary],
+                lastSummarizedIndex: endIndex,
+              }
+            : c
+        );
+        saveConversations(updated);
+        return updated;
       });
 
-      return currentSettings;
+      // Show notification if enabled
+      if (settings.showSummarizeNotifications) {
+        showToast(`💾 Conversation auto-summarized (saved ${summary.tokensSaved} tokens)`, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to auto-summarize:', error);
+      if (settings.showSummarizeNotifications) {
+        showToast('Failed to summarize conversation, continuing without summary', 'error');
+      }
+    }
+  }, [settings.keepRecentMessages, settings.apiKeys, settings.showSummarizeNotifications, selectedModel, showToast]);
+
+  const handleSendMessage = useCallback(async (content: string) => {
+    if (!currentConversation || !currentCharacter) return;
+
+    // Get the correct API key based on the model's provider
+    const providerKey = selectedModel.provider === 'openai' 
+      ? settings.apiKeys.openai
+      : selectedModel.provider === 'openrouter'
+      ? settings.apiKeys.openrouter
+      : selectedModel.provider === 'anthropic'
+      ? settings.apiKeys.anthropic
+      : '';
+
+    if (!providerKey) {
+      alert(`Please configure an API key for ${selectedModel.provider} in settings.`);
+      return;
+    }
+
+    const userMessage: Message = {
+      id: `msg-${uuidv4()}`,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    };
+
+    const updatedMessages = [...currentConversation.messages, userMessage];
+    
+    // Generate title if this is the first user message
+    const isFirstMessage = currentConversation.messages.length === 0;
+    const title = isFirstMessage ? generateConversationTitle(content) : undefined;
+    
+    updateConversation(currentConversation.id, updatedMessages, title);
+
+    // Check if summarization is needed
+    const updatedConversation = { ...currentConversation, messages: updatedMessages };
+    if (shouldSummarize(updatedConversation, settings.autoSummarizeThreshold, settings.keepRecentMessages)) {
+      await handleAutoSummarize(updatedConversation);
+      // After summarization, get the updated conversation from state
+      const refreshedConversation = conversations.find(c => c.id === currentConversation.id) || updatedConversation;
+      updatedConversation.summaries = refreshedConversation.summaries;
+      updatedConversation.lastSummarizedIndex = refreshedConversation.lastSummarizedIndex;
+    }
+
+    setIsLoading(true);
+
+    // Use conversation settings if available
+    const convSettings = currentConversation.settings || {};
+    const systemPrompt = convSettings.systemPromptOverride || currentCharacter.systemPrompt || 'You are a helpful assistant.';
+    
+    // Build optimized context using summarization if available
+    const messagesToSend = buildContextForAPI(updatedConversation, systemPrompt);
+    
+    sendMessageToAI(
+      messagesToSend,
+      providerKey,
+      selectedModel.id,
+      selectedModel.provider,
+      selectedModel.endpoint,
+      convSettings.temperature,
+      convSettings.maxTokens
+    ).then((response) => {
+      setIsLoading(false);
+
+      if (response.error) {
+        const errorMessage: Message = {
+          id: `msg-${uuidv4()}`,
+          role: 'assistant',
+          content: `Error: ${response.error}`,
+          timestamp: Date.now(),
+        };
+        updateConversation(currentConversation.id, [...updatedMessages, errorMessage]);
+      } else {
+        const assistantMessage: Message = {
+          id: `msg-${uuidv4()}`,
+          role: 'assistant',
+          content: response.content,
+          timestamp: Date.now(),
+        };
+        updateConversation(currentConversation.id, [...updatedMessages, assistantMessage]);
+      }
     });
-  }, [currentConversation, currentCharacter, selectedModel, updateConversation]);
+  }, [currentConversation, currentCharacter, selectedModel, updateConversation, settings, handleAutoSummarize, conversations]);
 
   const handleEditMessage = useCallback((messageId: string, newContent: string) => {
     if (!currentConversation) return;
@@ -554,6 +676,8 @@ function App() {
         autoScroll={settings.autoScroll}
         showTimestamps={settings.showTimestamps}
         fontSize={settings.fontSize}
+        conversation={currentConversation}
+        autoSummarizeThreshold={settings.autoSummarizeThreshold}
         onSendMessage={handleSendMessage}
         onSelectModel={(modelId) => updateSettings({ selectedModelId: modelId })}
         onOpenSettings={() => setIsSettingsPanelOpen(true)}
@@ -613,6 +737,14 @@ function App() {
         onSave={handleSaveCustomModel}
         model={editingModel}
       />
+
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setToastMessage(null)}
+        />
+      )}
     </div>
   );
 }
